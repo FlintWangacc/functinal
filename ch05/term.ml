@@ -65,23 +65,27 @@ let rec term_of_string_aux strLst =
     match h1 with
     | h2::t2 -> (
       match t2 with
-      | [] -> Var (String.get h2 0)::term_of_string_aux t1
+      | [] -> (*Var (String.get h2 0)::term_of_string_aux t1*)
+              Var (h2)::term_of_string_aux t1
       | _ -> let h2childLst = h1 |> subList |> toChar |> matchSubStr [] |> List.rev in
              let h2nodeLst = term_of_string_aux h2childLst in
              printStrLst "h1:" h1;
              List.iter (printStrLst "h2child\n") h2childLst;
-             Term (String.get h2 0, h2nodeLst)::term_of_string_aux t1
+             (*Term (String.get h2 0, h2nodeLst)::term_of_string_aux t1*)
+             Term (h2, h2nodeLst)::term_of_string_aux t1
       )
     | [] -> (
       match h1 with
     | h2::t2 -> (
       match t2 with
-      | [] -> [Var (String.get h2 0)]
+      | [] -> (*[Var (String.get h2 0)]*)
+              [Var (h2)]
       | _ -> let h2childLst = h1 |> subList |> toChar |> matchSubStr [] |> List.rev in
              let h2nodeLst = term_of_string_aux h2childLst in
              printStrLst "h1:" h1;
              List.iter (printStrLst "h2childLst:") h2childLst;
-             Term (String.get h2 0, h2nodeLst)::term_of_string_aux t1
+             (*Term (String.get h2 0, h2nodeLst)::term_of_string_aux t1*)
+             Term (h2, h2nodeLst)::term_of_string_aux t1
       )
     )
   )
@@ -98,9 +102,9 @@ let rec term_of_string_aux strLst =
 let term_of_string str =
   let strList = String.to_seq str |> List.of_seq |> List.map (Char.escaped) 
                 |> (fun t -> [t]) in
-  term_of_string_aux strList
+  term_of_string_aux strList |> List.hd
 
-let term_of_string2 str =
+(*let term_of_string2 str =
   let strList = String.to_seq str |> List.of_seq in
   let subList lst = List.filteri (fun idx _ -> idx >=2 && idx <= (List.length lst) - 2) lst in
   let subChildLst = List.rev (subList strList |> matchSubStr [])
@@ -112,10 +116,79 @@ let rec term_of_string str =
   | h::t -> let strLen = String.length str in
             let subStr = String.sub str 2 (strLen-2) in
             let termLst = term_of_string subStr in
-            [Term (h, termLst)]
+            [Term (h, termLst)]*)
 
 let rec term_trav f g start v = function
   | (Term(oper, sons)) -> f (oper, List.fold_left (fun acc t -> g (term_trav f g acc v t) start) start sons)
   | (Var n) -> v n
 
+let vars t = term_trav snd List.append [] (fun x -> [x]) t
+
 let occurs v t = List.mem v (vars t)
+
+let rec print_term_str = function
+  | Term (oper, sons) -> let ls = String.cat oper "(" in
+                   let ssl = List.map (fun e -> print_term_str e) sons in
+                   let ss = String.concat "," ssl in
+                   String.cat ss ")" |> String.cat ls
+  | Var n -> n
+
+let print_term t =
+  print_string  (print_term_str t)
+
+let print_subst subst =
+  List.iter (fun (x, t) -> print_string x;
+                           print_string " --> ";
+                           print_term t;
+                           print_newline ())
+  subst
+
+let rec apply_subst subst = function
+  | (Term (f, tl)) -> Term (f, (List.map (apply_subst subst) tl))
+  | (Var x as v) -> try List.assoc x subst
+                    with _ -> v
+
+(*let subst = ["x", term_of_string "g(z)"]
+in t11 = apply_subst subst (term_of_string "f(x,y,x)")*)
+
+let compsubst subst1 subst2 =
+  (List.map (fun (v, t) -> (v, apply_subst subst1 t)) subst2)
+  @ (let vs = List.map fst subst2 in
+  List.filter (fun (x, t) -> not (List.mem x vs)) subst1)
+
+(*let subst1 = ["x",term_of_string "g(x,y)"]
+and subst2 = ["y",term_of_string "h(x,z)";"x",term_of_string "k(x)"] in
+print_subst (compsubst subst1 subst2)*)
+
+exception Match_exc
+
+let som_subst s1 s2 =
+  List.fold_left (fun subst (x, t) -> try let u = List.assoc x subst in
+                                     if t = u then subst
+                                     else raise Match_exc
+                                with Not_found -> (x,t)::subst)
+  s1 s2
+
+let matching (t1, t2) =
+  let rec matchrec subst = function
+  | (Var v, t) -> som_subst [v,t] subst
+  | (t, Var v) -> raise Match_exc
+  | (Term(op1,sons1), Term(op2,sons2)) ->
+    if op1 = op2 then List.fold_left matchrec subst (List.combine sons1 sons2)
+    else raise Match_exc in
+    matchrec [] (t1,t2)
+
+exception Unify_exc
+
+let rec unify = function
+  | (Var v, t2) -> if Var v = t2 then [] else
+                   if occurs v t2 then raise Unify_exc
+                   else [v, t2]
+  | (t1, Var v) -> if occurs v t1 then raise Unify_exc
+                   else [v, t1]
+  | (Term (op1, sons1), Term (op2, sons2)) ->
+    let subst_unif s (t1, t2) =
+      compsubst (unify (apply_subst s t1, apply_subst s t2)) s in
+    if op1 = op2 then
+      (List.fold_left subst_unif [] (List.combine sons1 sons2))
+    else raise Unify_exc
