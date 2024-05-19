@@ -192,3 +192,107 @@ let rec unify = function
     if op1 = op2 then
       (List.fold_left subst_unif [] (List.combine sons1 sons2))
     else raise Unify_exc
+
+type ml_unop = Ml_fst | Ml_snd
+
+type ml_binop = Ml_add | Ml_sub | Ml_mult | Ml_eq | Ml_less 
+type ml_exp =
+    Ml_int_const of int
+  | Ml_bool_const of bool
+  | Ml_pair of ml_exp * ml_exp
+  | Ml_unop of ml_unop * ml_exp
+  | Ml_binop of ml_binop * ml_exp * ml_exp
+  | Ml_var of string
+  | Ml_if of ml_exp * ml_exp * ml_exp
+  | Ml_fun of string * ml_exp
+  | Ml_app of ml_exp * ml_exp
+  | Ml_let of string * ml_exp * ml_exp
+  | Ml_letre of string * ml_exp * ml_exp
+
+type ml_type =
+    Int_type | Bool_type
+  | Pair_type of ml_type * ml_type
+  | Arrow_type of ml_type * ml_type
+  | Var_type of string
+
+let var n = Var ("v"^(string_of_int n))
+
+let const c = Term(c,[])
+
+let pair(t1,t2) = Term("pair",[t1;t2])
+
+let arrow(t1,t2) = Term("arrow",[t1;t2])
+
+let (new_int,reset_new_int) =
+  let c = ref (-1) in
+  (fun () -> c:=!c+1; !c),
+  (fun () -> c:=-1)
+
+let unop_type = function
+    Ml_fst -> let a = var(new_int()) and b = var(new_int())
+              in (pair(a, b), a)
+  | Ml_snd -> let a = var(new_int()) and b = var(new_int())
+              in (pair(a, b), b)
+
+let binop_type = function
+  | Ml_add -> (const "int", const "int", const "int")
+  | Ml_sub -> (const "int", const "int", const "int")
+  | Ml_mult -> (const "int", const "int", const "int")
+  | Ml_eq -> (const "int", const "int", const "bool")
+  | Ml_less -> (const "int", const "int", const "bool")
+
+let generate_type_constraints e =
+  let rec gen n tenv = function
+    (Ml_int_const _) -> [var n, const "int"]
+  | (Ml_bool_const _) -> [var n, const "bool"]
+  | (Ml_unop (op, e)) ->
+      let (t1, t2) = unop_type op
+      and ne = new_int () in
+      (var n, t2)::(var ne, t1)::(gen ne tenv e)
+  | (Ml_binop (op,e1,e2)) ->
+      let (t1,t2,t3) = binop_type op
+      and n1 = new_int () and n2 = new_int () in
+      (var n, t3) :: (var n1, t1) :: (var n2, t2)
+      :: (gen n1 tenv e1 @ gen n2 tenv e2)
+  | (Ml_pair (e1, e2)) ->
+      let n1 = new_int () and n2 = new_int () in
+      (var n,(pair (var n1, var n2))) :: (gen n1 tenv e1 @ gen n2 tenv e2)
+  | (Ml_var x) -> [ var n, List.assoc x tenv ]
+  | (Ml_if (e1,e2,e3)) ->
+      let n1 = new_int () and n2 = new_int ()
+      and n3 = new_int () in
+      (var n1, const "bool")::(var n, var n2)::(var n, var n3)
+      ::((gen n1 tenv e1) @ (gen n2 tenv e2) @ (gen n3 tenv e3))
+  | (Ml_fun(x,e)) ->
+      let nx = new_int () and ne = new_int () in
+      (var n, arrow(var nx, var ne))::
+      (gen ne ((x, var n)::tenv) e)
+  | (Ml_app (Ml_var "Rec", Ml_fun(f,e))) ->
+    let nf = new_int () and ne = new_int () in
+    (var n, var ne)::
+    (gen ne ((f, var n)::tenv) e)
+  | (Ml_app (e1, e2)) ->
+    let n1 = new_int () and n2 = new_int () in
+    (var n1, arrow(var n2, var n))::
+    (gen n1 tenv e1 @ gen n2 tenv e2)
+  | _ -> failwith "Not implemented" in
+  reset_new_int ();gen (new_int ()) [] e
+
+let rec ml_type_of_term = function
+  | Var s -> Var_type s
+  | Term ("int", []) -> Int_type
+  | Term ("bool", []) -> Bool_type
+  | Term ("pair", [t1;t2]) ->
+      Pair_type(ml_type_of_term t1, ml_type_of_term t2)
+  | Term ("arrow", [t1;t2]) ->
+      Arrow_type(ml_type_of_term t1, ml_type_of_term t2)
+
+let unify_list tl =
+  let subst_unif s (t1,t2) =
+    compsubst (unify (apply_subst s t1, apply_subst s t2)) s in
+  List.fold_left subst_unif [] tl
+
+let synthesize_type e =
+  ml_type_of_term
+   (apply_subst (unify_list (generate_type_constraints e))
+    (var 0))
