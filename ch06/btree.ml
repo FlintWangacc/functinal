@@ -92,3 +92,24 @@ let do_btree (f:'a -> unit) =
         dof t1; f a; dof t2
   in
   dof
+
+type comparison = Smaller | Equiv | Greater
+
+let mk_order ord x y =
+  if ord x y then Smaller else
+  if x = y then Equiv
+  else Greater
+
+let mk_preorder (lt,eq) x y =
+  if lt x y then Smaller else
+  if eq x y then Equiv
+  else Greater
+
+type 'a minmax = Min | Plain of 'a | Max
+
+let extend_order ord x y =
+  match (x,y) with
+  | (Min, Min) | (Max, Max) ->Equiv
+  | (Min, _) | (_, Max) -> Smaller
+  | (Max, _) | (_, Min) -> Greater
+  | (Plain x, Plain y) -> ord x y
