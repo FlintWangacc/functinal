@@ -113,3 +113,17 @@ let extend_order ord x y =
   | (Min, _) | (_, Max) -> Smaller
   | (Max, _) | (_, Min) -> Greater
   | (Plain x, Plain y) -> ord x y
+
+let rec is_bst order =
+  let rec check_bst (a, b) t =
+    let ext_order = extend_order order in
+    match t with
+    | Empty -> true
+    | (Bin (t1, x, t2)) ->
+        let x = Plain x in
+        not (ext_order a x = Greater) &&
+        not (ext_order x b = Greater) &&
+        check_bst (a, x) t1 &&
+        check_bst (x, b) t2
+  in
+  check_bst (Min, Max)
