@@ -127,3 +127,32 @@ let rec is_bst order =
         check_bst (x, b) t2
   in
   check_bst (Min, Max)
+
+exception Bst_search_exc of string
+
+let search_bst order answer e =
+  let rec search = function
+      Empty -> raise (Bst_search_exc "search_bst")
+    | (Bin(t1,x,t2) as t) ->
+        match order e x with
+          Equiv -> answer t
+        | Smaller -> search t1
+        | Greater -> search t2
+  in
+  search
+
+let find_bst order = search_bst order root
+
+let belongs_to_bst order e t =
+  try find_bst order e t; true
+  with Bst_search_exc _ -> false
+
+let change_bst order modify e =
+  let rec change = function
+    Empty -> raise (Bst_search_exc "change_bst")
+  | (Bin (t1,x,t2) as t) ->
+      (match order e x with
+        Equiv -> Bin (t1, modify x, t2)
+      | Smaller -> Bin (change t1, x, t2)
+      | Greater -> Bin (t1, x, change t2))
+  in change
