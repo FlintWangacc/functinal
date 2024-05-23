@@ -210,3 +210,31 @@ let add_list_root_to_bst option order =
 let mk_bst2 option order = add_list_root_to_bst option int_comp Empty
 
 let t2 = mk_bst2 (fun x y -> x) int_comp [10;15;12;4;6;21;8;1;17;2]
+
+exception Bst_exc of string
+
+let rec remove_biggest = function
+  | (Bin(t1,a,Empty)) -> (a,t1)
+  | (Bin(t1,a,t2)) ->
+      let (a',t') = remove_biggest t2 in (a', Bin(t1,a,t'))
+  | Empty -> raise (Bst_exc "remove_biggest: tree is empty")
+
+let rec rem_root_from_bst = function
+    Empty -> raise (Bst_exc "rem_root_from_bst: tree is empty")
+  | (Bin(Empty,a,t2)) -> t2
+  | (Bin (t1,_,t2)) ->
+      let (a',t') = remove_biggest t1 in
+      Bin(t',a',t2)
+
+let rec rem_from_bst order e =
+  let rec rem = function
+    | Empty -> raise (Bst_search_exc "rem_from_bst")
+    | (Bin (t1,a,t2) as t) ->
+        (match order e a with
+          Equiv -> rem_root_from_bst t
+        | Smaller -> Bin(rem t1, a, t2)
+        | Greater -> Bin(t1,a, rem t2))
+  in rem
+
+let rem_list_from_bst order btree lst =
+  List.fold_left (fun btree e -> rem_from_bst order e btree) btree lst
