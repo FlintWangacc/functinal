@@ -99,6 +99,7 @@ let mk_order ord x y =
   if ord x y then Smaller else
   if x = y then Equiv
   else Greater
+let int_comp = mk_order (<)
 
 let mk_preorder (lt,eq) x y =
   if lt x y then Smaller else
@@ -156,3 +157,56 @@ let change_bst order modify e =
       | Smaller -> Bin (change t1, x, t2)
       | Greater -> Bin (t1, x, change t2))
   in change
+
+let rec add_bottom_to_bst option order t e =
+  let rec add = function
+    | Empty -> Bin (Empty, e, Empty)
+    | (Bin (t1, x, t2) as t) ->
+          (match order e x with
+             Equiv -> Bin(t1, option e x, t2)
+           | Smaller -> Bin(add t1, x, t2)
+           | Greater -> Bin(t1, x, add t2)) in
+  add t
+
+let add_list_bottom_to_bst option order =
+  List.fold_left (add_bottom_to_bst option order)
+
+let mk_bst option order = add_list_bottom_to_bst option order Empty
+
+let t = mk_bst (fun x y -> x) int_comp [10;15;12;4;6;21;8;1;17;2]
+
+(*let rec cut order e x = 
+  match x with
+  | Empty -> (Empty, e, Empty)
+  | (Bin (t1,a,t2)) ->
+        (print_int a; print_newline ();match order e a with
+          Smaller -> let (t,e',t') = cut order e t1 in
+                     (t, e', Bin(t',a, t2))
+        | Equiv -> (t1, a, t2)
+        | Greater -> let (t, e', t') = cut order e t2 in
+                      (Bin(t1,a,t),e',t'))
+let cut_bst order e =
+  cut order e*)
+
+let rec cut_bst order e =
+  let rec cut = function
+    Empty -> (Empty, e, Empty)
+  | (Bin (t1,a,t2)) ->
+      (match order e a with
+        Smaller -> let (t,e',t') = cut t1 in
+                   (t, e', Bin(t',a,t2))
+      | Equiv -> (t1,a,t2)
+      | Greater -> let (t,e',t') = cut t2 in
+                    (Bin (t1,a,t),e',t'))
+  in cut
+
+let add_root_to_bst option order t e =
+  let t1,e',t2 = cut_bst order e t in
+  Bin(t1, option e e', t2)
+
+let add_list_root_to_bst option order =
+  List.fold_left (add_root_to_bst option order)
+
+let mk_bst2 option order = add_list_root_to_bst option int_comp Empty
+
+let t2 = mk_bst2 (fun x y -> x) int_comp [10;15;12;4;6;21;8;1;17;2]
