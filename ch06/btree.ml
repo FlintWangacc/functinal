@@ -238,3 +238,19 @@ let rec rem_from_bst order e =
 
 let rem_list_from_bst order btree lst =
   List.fold_left (fun btree e -> rem_from_bst order e btree) btree lst
+
+let rot_right = function
+    Bin(Bin(u, p, v),q, w) -> Bin(u, p, Bin(v,q,w))
+  | _ -> raise (Btree_exc "rot_right")
+
+let rot_left = function
+    (Bin(u, p, Bin(v, q, w))) -> Bin(Bin(u,p,v), q, w)
+  | _ -> raise (Btree_exc "rot_left")
+
+let rot_left_right = function
+    (Bin(Bin(t,p,Bin(u,q,v)),r,w)) -> Bin(Bin(t,p,u),q, Bin(v,r,w))
+  | _ -> raise (Btree_exc "rot_left_right")
+
+let rot_right_left = function
+    (Bin(t,p,Bin(Bin(u,q,v),r,w))) -> Bin(Bin(t,p,u),q,Bin(v,r,w))
+  | _ -> raise (Btree_exc "rot_right_left")
