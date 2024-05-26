@@ -254,3 +254,43 @@ let rot_left_right = function
 let rot_right_left = function
     (Bin(t,p,Bin(Bin(u,q,v),r,w))) -> Bin(Bin(t,p,u),q,Bin(v,r,w))
   | _ -> raise (Btree_exc "rot_right_left")
+
+type balance = Left | Balanced | Right
+
+type 'a avltree = ('a * balance) btree
+
+exception Avl_exc of string
+
+exception Avl_search_exc of string
+
+let belongs_to_avl order =
+  belongs_to_bst (fun x y -> order (fst y))
+
+let find_avl order e (t:('a * balance) btree) =
+  try fst(find_bst (fun x y -> order x (fst y)) e t)
+  with Bst_search_exc _ -> raise (Avl_search_exc "find_avl")
+
+let h_balanced (t:('a*balance) btree) =
+  let rec correct_balance = function
+    Empty -> 0
+  | (Bin(t1,(x,b),t2)) ->
+    let n1 = correct_balance t1 and n2 = correct_balance t2 in
+    if (b=Balanced && n1 = n2) then n1 + 1 else
+    if (b=Left && n1 = n2 + 1) then n1 + 1 else
+    if (b=Right && n2 = n1 + 1) then n2 + 1
+    else raise (Avl_exc "not avl") in
+  try correct_balance t; true
+  with Avl_exc _ -> false
+
+let is_avl order (t:('a*balance) btree) =
+  h_balanced t && is_bst (fun x y -> order (fst x) (fst y)) t
+
+let mirror_avl t =
+  btree_hom
+    (fun (t1,(x,b),t2)
+      -> let b' = match b with
+           Left -> Right
+         | Balanced ->Balanced
+         | Right -> Left in
+         Bin(t2,(x,b'),t1))
+  Empty t
