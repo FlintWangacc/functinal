@@ -294,3 +294,63 @@ let mirror_avl t =
          | Right -> Left in
          Bin(t2,(x,b'),t1))
   Empty t
+
+exception Avl_rotation_exc of string
+
+let rot_right = function
+  (Bin(Bin(u,(p,b),v),(q,_),w)) ->
+    (match b with
+      Balanced -> Bin(u,(p,Right),Bin(v,(q,Left),w))
+    | Left -> Bin(u,(p,Balanced),Bin(v,(q,Balanced),w))
+    | Right -> raise (Avl_rotation_exc "rot_right"))
+  | _ -> raise (Avl_rotation_exc "rot_right")
+
+type avl_add_info = No_inc | Incleft | Incright
+
+let rec add_to_avl option order t e =
+  let rec add = function
+    Empty -> Bin(Empty,(e,Balanced),Empty),Incleft
+  | (Bin(t1,(x,b),t2) as t) ->
+      (match (order e x, b) with
+        (Equiv,_) -> Bin(t1, (option e x,b), t2),No_inc
+      | (Smaller,Balanced) ->
+          let t,m = add t1 in
+          if m = No_inc then Bin(t,(x,Balanced),t2),No_inc
+          else Bin(t,(x,Left),t2),Incleft
+      | (Greater,Balanced) ->
+          let t,m = add t2 in
+          if m = No_inc then Bin(t1,(x,Balanced),t),No_inc
+          else Bin(t1,(x,Right),t),Incright
+      | (Greater,Left) ->
+          let t,m = add t2 in
+          if m = No_inc then Bin(t1,(x,Left),t),No_inc
+          else Bin(t1,(x,Balanced),t),No_inc
+      | (Smaller,Left) ->
+          let t,m = add t1 in
+          (match m with
+            No_inc -> Bin(t,(x,Left),t2),No_inc
+          | Incleft -> rot_right(Bin(t,(x,Balanced),t2)),No_inc
+          | Incright -> rot_left_right(Bin(t,(x,Balanced),t2)),No_inc)
+      | (Smaller,Right) ->
+          let t,m = add t1 in
+          if m = No_inc then Bin(t,(x,Right),t2),No_inc
+          else Bin(t,(x,Balanced),t2),No_inc
+      | (Greater,Right) ->
+          let t,m = add t2 in
+          (match m with
+            No_inc -> Bin(t1,(x,Right),t),No_inc
+          | Incleft -> rot_right_left(Bin(t1,(x,Balanced),t)),No_inc
+          | Incright -> rot_left(Bin(t1,(x,Balanced),t)),No_inc))
+      in fst(add t)
+
+let add_list_to_avl option order = List.fold_left (add_to_avl option order)
+
+let mk_avl option order = add_list_to_avl option order Empty
+
+let merge_avl option order =
+  it_btree (fun t x -> add_to_avl option order t (fst x))
+
+let flat_avl t = btree_it (fun x l -> fst x :: l) t []
+
+let avl_sort order lst =
+  flat_avl @@ mk_avl (fun x y -> x) order lst
