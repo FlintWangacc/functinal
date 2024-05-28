@@ -354,3 +354,80 @@ let flat_avl t = btree_it (fun x l -> fst x :: l) t []
 
 let avl_sort order lst =
   flat_avl @@ mk_avl (fun x y -> x) order lst
+
+type avl_rem_info = No_dec | Dec
+
+let balance = function
+    (Bin (_,(_,b),_)) -> b
+  | Empty -> Balanced
+
+let balance_right (t,x,t') =
+  match balance t with
+    (Left | Balanced) -> rot_right (Bin(t,(x,Balanced),t'))
+  | Right -> rot_left_right (Bin(t,(x,Balanced),t'))
+
+let balance_left (t,x,t') =
+  match balance t' with
+    (Right | Balanced) -> rot_left (Bin(t,(x,Balanced),t'))
+  | Left -> rot_right_left (Bin(t,(x,Balanced),t'))
+
+let rec avl_remove_biggest = function
+    (Bin(t1,(a,_),Empty)) -> (a,t1,Dec)
+  | (Bin(t1,(a, Balanced), t2)) ->
+      let (a',t',b) = avl_remove_biggest t2 in
+      (match b with
+        Dec -> (a', Bin(t1,(a,Left),t'),No_dec)
+      | No_dec -> (a', Bin(t1,(a, Balanced),t'),No_dec))
+  | (Bin(t1,(a,Right),t2)) ->
+      let (a',t',b) = avl_remove_biggest t2 in
+      (match b with
+        Dec -> (a', Bin(t1,(a,Balanced),t'),Dec)
+      | No_dec -> (a', Bin(t1, (a,Right),t'),No_dec))
+  | (Bin(t1,(a,Left),t2)) ->
+      let (a',t',b) = avl_remove_biggest t2 in
+      (match b with
+        Dec -> (a', balance_right (t1,a,t'),
+                match snd(root t1) with
+                 (Left|Right) -> Dec
+                | Balanced -> No_dec)
+      | No_dec -> (a', Bin(t1, (a,Right),t'), No_dec))
+
+let rec remove_from_avl order t e =
+  let rec remove = function
+    Empty -> raise (Avl_search_exc "remove_from_avl")
+  | (Bin(t1,(a,b),t2)) ->
+      match order e a with
+        Equiv ->
+          if t1 = Empty then t2,Dec else
+          if t2 = Empty then t1,Dec else
+          let (a',t',m) = avl_remove_biggest t1 in
+          (match m with
+            No_dec -> Bin(t',(a',b),t2),No_dec
+          | Dec -> (match b with
+                      Balanced -> Bin(t',(a',Right),t2),No_dec
+                    | Left -> Bin(t',(a',Balanced),t2),Dec
+                    | Right -> balance_left(t',a',t2),
+                               if balance t2 = Balanced
+                              then No_dec else Dec))
+      | Smaller ->
+        let t',m = remove t1 in
+        (match m with
+          No_dec -> Bin(t',(a,b),t2),No_dec
+        | Dec -> (match b with
+                    Balanced -> Bin(t',(a,Right),t2),No_dec
+                  | Left -> Bin(t',(a,Balanced),t2),Dec
+                  | Right -> balance_left(t',a,t2),
+                             if balance t2 = Balanced
+                             then No_dec else Dec))
+      | Greater ->
+        let t',m = remove t2 in
+        (match m with
+          No_dec -> Bin(t1,(a,b),t'),No_dec
+        | Dec -> (match b with
+                    Balanced -> Bin(t1,(a,Left),t'),No_dec
+                  | Right -> Bin(t1,(a,Balanced),t'),Dec
+                  | Left -> balance_right(t1,a,t'),
+                            if balance t1 = Balanced
+                            then No_dec else Dec))
+ in
+  fst (remove t)
