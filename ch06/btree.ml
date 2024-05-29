@@ -431,3 +431,25 @@ let rec remove_from_avl order t e =
                             then No_dec else Dec))
  in
   fst (remove t)
+
+type ('a,'b) dictionary =
+    { dict_rel: 'b -> 'b -> comparison;
+      dict_data: ('a * 'b) avltree}
+
+let dict_assoc e d =
+  fst(fst(find_avl (fun x y -> d.dict_rel x (snd y)) e d.dict_data))
+
+let dict_add_or_replace {dict_rel=c;dict_data=t} e =
+  {dict_rel=c;
+   dict_data = add_to_avl (fun x y -> y) (fun x y -> c (snd x) (snd y)) t e}
+
+let dict_remove {dict_rel=c;dict_data=t} key =
+  {dict_rel=c;
+   dict_data=remove_from_avl (fun x y -> c x (snd y)) t key}
+
+let dict_merge opt d1 d2 =
+  if not (d1.dict_rel == d2.dict_rel) then
+    failwith "dict_merge:dictionaries have different orders" else
+  {dict_rel = d1.dict_rel;
+   dict_data = merge_avl opt (fun x y -> d1.dict_rel (snd x) (snd y))
+             d1.dict_data d2.dict_data}
