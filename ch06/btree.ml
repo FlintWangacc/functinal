@@ -536,3 +536,59 @@ let set_diff s1 s2 =
   else it_set substract_from_set s1 s2
 
 let set_intersection s1 s2 = set_diff s1 (set_diff s1 s2)
+
+type queue_mod1 = Inc | No_Inc
+
+let rec enqueue t e =
+  let rec add = function
+    | Empty -> Bin(Empty,(e,Balanced),Empty),Inc
+    | (Bin(t1,(x,b),t2)) ->
+      let t,m = add t2 in
+      match (b,m) with
+        Balanced,No_Inc -> Bin(t1,(x,Balanced),t),No_Inc
+      | Balanced,_ -> Bin(t1,(x,Right),t),Inc
+      | Left,No_Inc -> Bin(t1,(x,Left),t),No_Inc
+      | Left,_ -> Bin(t1,(x,Balanced),t),No_Inc
+      | Right,No_Inc -> Bin(t1,(x,Right),t),No_Inc
+      | Right,Inc -> rot_left(Bin(t1,(x,Balanced),t)),No_Inc
+  in fst (add t) 
+
+type queue_mod2 = Dec | No_Dec
+
+let dequeue t =
+  let rec sub = function
+    Empty -> failwith "dequeue: empty queue"
+  | (Bin (Empty,(a,b),t2)) -> (a,t2),Dec
+  | (Bin (t1,(a,b),t2))
+    -> let (a',t'),m = sub t1 in
+        (match m with
+          No_Dec -> (a',Bin(t',(a,b),t2)),No_Dec
+        | Dec -> (match b with
+                    Balanced -> (a',Bin (t',(a,Right),t2)),No_Dec
+                  | Left -> (a',Bin(t',(a,Balanced),t2)),Dec
+                  | Right -> (a',balance_left(t',a,t2)),if balance t2 = Balanced
+                                                       then No_Dec else Dec))
+  in fst (sub t)
+
+let breadth_it_btree orient f e t =
+  let rec trav x = function
+    Empty -> x
+  | q -> let (t,q') = dequeue q in
+         match t with
+          Empty -> trav x q'
+        | Bin(t1,a,t2)
+          -> trav (f x a) (enqueue (enqueue q' t1) t2)
+  in trav e (enqueue Empty t)
+
+let breadth_btree_it f t e =
+  let rec trav = function
+    Empty -> e
+  | q -> let (t,q') = dequeue q in
+         match t with
+           Empty -> trav q'
+         | Bin (t1,a,t2)
+            -> f a (trav (enqueue (enqueue q' t1) t2))
+  in trav (enqueue Empty t)
+
+let breadth_flat_btree f t =
+  breadth_btree_it (fun x l -> f x::l) t []
