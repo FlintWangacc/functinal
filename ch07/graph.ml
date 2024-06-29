@@ -59,12 +59,18 @@ let archive_map arch_part f (arch,l) =
       arch_map (add_list_to_archive arch (List.map arch_part ll')) (ll'@ll) cl in
   arch_map arch [] l
 
-(*let archive_map arch_part f (s, l) = 
+(*let archive_map arch_part f (s, l) =
   let rec arch_map s ll = function
     [] -> (s, ll)
   | (c::l) -> let ll' = select (fun c -> not (set_member c s)) (f c) in
               arch_map (add_list_to_set s ll') (ll'@ll) l in
   arch_map s [] l*)
+
+  let mk_order ord x y =
+    if ord x y then Smaller else
+    if x = y then Equiv
+    else Greater
+  let int_comp = mk_order (<)
 
 let (>>) f g x = g(f(x))
 
@@ -80,6 +86,16 @@ let solve_breadth_first (ok,pos_moves,comp) arch_part start =
       (List.exists ok << snd)
       (archive_map arch_part pos_moves)
       (make_archive comp (List.map arch_part start),start))
+
+let solve_depth_first (ok, pos_moves, comp) arch_part c =
+  let rec solve_rec a = function
+    [] -> raise No_solution
+  | (c::cl) ->
+      if ok c then c else
+      if archive_member (arch_part c) a then solve_rec a cl
+      else solve_rec (add_to_archive a (arch_part c))
+              (pos_moves c @ cl) in
+  solve_rec (make_archive comp []) [c]
 
 (*let explore_breadth_first (pos_moves,comp) arch_map start =
   fst (loop
@@ -313,12 +329,12 @@ let donkey_comp b1 b2 =
       match list_comp (b1.vertics,b2.vertics) with
       | Smaller -> Smaller
       | Greater -> Greater
-      | Equiv -> int_comp b1.squares b2.squares   
+      | Equiv -> int_comp b1.squares b2.squares
   )
 
-(*let donkey_comp b1 b2 = 
+(*let donkey_comp b1 b2 =
   let list_eqaul = List.equal (fun a b -> a = b) in
-  if b1.donkey = b2.donkey && b1.horiz = b2.horiz && 
+  if b1.donkey = b2.donkey && b1.horiz = b2.horiz &&
      list_eqaul b1.squares b2.squares && list_eqaul b1.vertics b2.vertics then
       Equiv
   else
@@ -333,4 +349,186 @@ let solve_red_donkey start ok =
 let ok_config c = (snd(snd c)).donkey / 10 = 4
 
 let start = ((31,34), start)
-let ms = List.rev (fst (solve_red_donkey start ok_config))
+(*let ms = List.rev (fst (solve_red_donkey start ok_config))*)
+
+let compact l =
+  let rec save n i l =
+    if i<3 then n
+    else save ((n lsl 1) lor (List.hd l)) (i-1) (List.tl l) in
+  match l with
+    n0::n1::n2::l -> (4*n2+2*n1+n0, save 0 32 (List.rev l))
+  | _ -> failwith "compact: int list: list too short"
+
+let uncompact (m, n) =
+  let rec unsave n i =
+    if i > 29 then [] else (n mod 2) :: unsave (n lsr 1) (i + 1) in
+  (n mod 2)::((m lsr 1) mod 2)::((m lsr 2) mod 2)::unsave n 0
+
+let nth n rep = List.nth (uncompact rep) n
+
+let set_nth n b rep =
+  let t = uncompact rep in
+  let nl = List.mapi (fun idx v -> if idx = n then b else v) t in
+  compact nl
+
+
+let solit_start = compact [
+              1; 1; 1;
+              1; 1; 1;
+        1; 1; 1; 1; 1; 1; 1;
+        1; 1; 1; 0; 1; 1; 1;
+        1; 1; 1; 1; 1; 1; 1;
+              1; 1; 1;
+              1; 1; 1
+]
+
+let solit_end = compact [
+             0; 0; 0;
+             0; 0; 0;
+       0; 0; 0; 0; 0; 0; 0;
+       0; 0; 0; 1; 0; 0; 0;
+       0; 0; 0; 0; 0; 0; 0;
+             0; 0; 0;
+             0; 0; 0
+]
+
+type direction = Left | Up | Right | Down
+
+let op_dir = function
+  Left -> Right | Right -> Left | Up -> Down | Down -> Up
+
+let right = [|
+                      1;  2; -1;
+                      4;  5; -1;
+              7;  8;  9; 10; 11; 12; -1;
+             14; 15; 16; 17; 18; 19; -1;
+             21; 22; 23; 24; 25; 26; -1;
+                     28; 29; -1;
+                     31; 32; -1
+|]
+
+let right2 = [|
+                      2; -1; -1;
+                      5; -1; -1;
+              8;  9; 10; 11; 12; -1; -1;
+             15; 16; 17; 18; 19; -1; -1;
+             22; 23; 24; 25; 26; -1; -1;
+                     29; -1; -1;
+                     32; -1; -1;
+|]
+
+let left = [|
+                   -1; 0; 1;
+                   -1; 3; 4;
+             -1; 6; 7; 8; 9; 10; 11;
+             -1;13;14;15;16; 17; 18;
+             -1;20;21;22;23; 24; 25;
+                   -1;28;29;
+                   -1;30;31;
+|] and
+left2 = [|
+            -1; -1; 0;
+            -1; -1; 3;
+    -1; -1;  6;  7; 8; 9; 10;
+    -1; -1; 13; 14;15;16; 17;
+    -1; -1; 20; 21;22;23; 24;
+            -1; -1; 27;
+            -1; -1; 30;
+|]
+
+let up = [|
+            -1; -1; -1;
+             0;  1;  2;
+    -1; -1;  3;  4;  5; -1; -1;
+     6;  7;  8;  9; 10; 11; 12;
+    13; 14; 15; 16; 17; 18; 19;
+            22; 23; 24;
+            27; 28; 29;
+|] and
+up2 = [|
+          -1;-1;-1;
+          -1;-1;-1;
+    -1;-1; 0; 1; 2;-1;-1;
+    -1;-1; 3; 4; 5;-1;-1;
+     6; 7; 8; 9;10;11;12;
+          15;16;17;
+          22;23;24;
+|]
+
+let down = [|
+                3; 4; 5;
+                8; 9;10;
+         13;14;15;16;17;18;19;
+         20;21;22;23;24;25;26;
+         -1;-1;27;28;29;-1;-1;
+               30;31;32;
+               -1;-1;-1;
+|] and
+down2 = [|
+             8; 9;10;
+            15;16;17;
+      20;21;22;23;24;25;26;
+      -1;-1;27;28;29;-1;-1;
+      -1;-1;30;31;32;-1;-1;
+            -1;-1;-1;
+            -1;-1;-1;
+|]
+
+let table = function
+  Left, 1 -> left
+| Left, 2 -> left2
+| Right, 1 -> right
+| Right, 2 -> right2
+| Up, 1 -> up
+| Up, 2 -> up2
+| Down, 1 -> down
+| Down, 2 -> down2
+
+type config = {size:int; moves:(int*direction) list;
+               board:int * int}
+
+let correct_move i dir {size=k; moves=ml; board=p} =
+  let dir' = op_dir dir in
+  let tab = table (dir', 1) and tab2 = table (dir', 2) in
+  let i1 = tab.(i) and i2 = tab2.(i) in
+  if nth i p = 0 && i1 <> -1 && i2 <> -1 &&
+     nth i1 p = 1 && nth i2 p = 1
+  then [{size = pred k; moves=(i,dir)::ml;
+         board=set_nth i 1
+                (set_nth i1 0 (set_nth i2 0 p))}]
+else []
+
+let solit_moves config =
+  let rec pm n mvs =
+    if n < 0 then mvs
+    else pm (n-1)
+            (flat_map (fun d -> correct_move n d config)
+              [Left; Right; Up; Down] @ mvs) in
+  pm 32 []
+
+let solve_depth_first_solit_game ok =
+  solve_depth_first (ok, solit_moves, int_comp) (fun c -> c.board)
+
+let ok_solit cgoal c = (c.board = cgoal)
+
+let b1 = compact [
+                  0; 0; 0;
+                  0; 0; 0;
+            1; 1; 0; 0; 0; 0; 0;
+            1; 1; 1; 0; 0; 0; 0;
+            1; 1; 0; 0; 0; 0; 0;
+                  0; 0; 0;
+                  0; 0; 0
+]
+
+let b2 = compact [
+                 0; 0; 0;
+                 0; 0; 0;
+           0; 0; 0; 0; 0; 0; 0;
+           0; 0; 1; 0; 0; 0; 0;
+           0; 0; 0; 0; 0; 0; 0;
+                 0; 0; 0;
+                 0; 0; 0
+]
+
+let _ = solve_depth_first_solit_game (ok_solit b2) {size=7; moves=[]; board=b1}
